@@ -22,9 +22,6 @@ public unsafe class CaptureHookManager : IDisposable
 	public delegate void NetworkEventDelegate(PacketProto proto, Direction direction, ReadOnlySpan<byte> data);
 	public event NetworkEventDelegate NetworkEvent;
 	
-	private delegate void NetworkInit(nint a1, nint a2, int a3, uint a4);
-	private readonly Hook<NetworkInit> _networkInitHook;
-	
 	private delegate nuint RxPrototype(byte* data, byte* a2, nuint a3, nuint a4, nuint a5);
 	private delegate nuint TxPrototype(byte* data, byte* a2, nuint a3, nuint a4, nuint a5, nuint a6);
 	private delegate void LobbyTxPrototype(nuint data);
@@ -38,11 +35,11 @@ public unsafe class CaptureHookManager : IDisposable
 
 	private readonly LobbyEncryptionProvider _encryptionProvider;
 	private readonly SimpleBuffer _buffer;
+	private ulong _lastEncryptionInitTick = 0;
 
 	public CaptureHookManager()
 	{
-		var multiScanner = new MultiSigScanner(Process.GetCurrentProcess().MainModule, true);
-		var multiScanner2 = new MultiSigScanner3(Process.GetCurrentProcess().MainModule);
+		var multiScanner = new MultiSigScanner(Process.GetCurrentProcess().MainModule);
 		_buffer = new SimpleBuffer(1024 * 1024);
 		
 		var lobbyKeyPtr = DalamudApi.SigScanner.ScanText(LobbyKeySignature);
@@ -50,36 +47,18 @@ public unsafe class CaptureHookManager : IDisposable
 		_encryptionProvider = new LobbyEncryptionProvider(lobbyKey);
 		DalamudApi.PluginLog.Debug($"[CaptureHooks] Lobby key is {lobbyKey}.");
 		
-		// var rxPtrs = multiScanner.ScanText(GenericRxSignature, 3);
-		var rxPtrs = multiScanner2.ScanText(GenericRxSignature, 3);
-		// DalamudApi.PluginLog.Debug($"rxPtrs : {rxPtrs[0]:X} {rxPtrs[1]:X} {rxPtrs[2]:X}");
-		// DalamudApi.PluginLog.Debug($"rxPtrs2: {rxPtrs2[0]:X} {rxPtrs2[1]:X} {rxPtrs2[2]:X}");
-		// DalamudApi.PluginLog.Debug($"Off by : {rxPtrs[0] - rxPtrs2[0]:X} {rxPtrs[1] - rxPtrs2[1]:X} {rxPtrs[2] - rxPtrs2[2]:X}");
-		// DalamudApi.PluginLog.Debug($"rxPtrs[0]: {Util.ByteString((byte*)rxPtrs[0].ToPointer(), 0, 16)}");
-		// DalamudApi.PluginLog.Debug($"rxPtrs2[0]: {Util.ByteString((byte*)rxPtrs2[0].ToPointer(), 0, 16)}");
-		// DalamudApi.PluginLog.Debug($"rxPtrs[1]: {Util.ByteString((byte*)rxPtrs[1].ToPointer(), 0, 16)}");
-		// DalamudApi.PluginLog.Debug($"rxPtrs2[1]: {Util.ByteString((byte*)rxPtrs2[1].ToPointer(), 0, 16)}");
-		// DalamudApi.PluginLog.Debug($"rxPtrs[2]: {Util.ByteString((byte*)rxPtrs[2].ToPointer(), 0, 16)}");
-		// DalamudApi.PluginLog.Debug($"rxPtrs2[2]: {Util.ByteString((byte*)rxPtrs2[2].ToPointer(), 0, 16)}");
-		
+		var rxPtrs = multiScanner.ScanText(GenericRxSignature, 3);
+
 		_chatRxHook = DalamudApi.Hooks.HookFromAddress<RxPrototype>(rxPtrs[0], ChatRxDetour);
 		_lobbyRxHook = DalamudApi.Hooks.HookFromAddress<RxPrototype>(rxPtrs[1], LobbyRxDetour);
 		_zoneRxHook = DalamudApi.Hooks.HookFromAddress<RxPrototype>(rxPtrs[2], ZoneRxDetour);
 		
-		// var txPtrs = multiScanner.ScanText(GenericTxSignature, 2);
-		var txPtrs = multiScanner2.ScanText(GenericTxSignature, 2);
-		// DalamudApi.PluginLog.Debug($"txPtrs : {txPtrs[0]:X} {txPtrs[1]:X}");
-		// DalamudApi.PluginLog.Debug($"txPtrs2: {txPtrs2[0]:X} {txPtrs2[1]:X}");
-		// DalamudApi.PluginLog.Debug($"Off by : {txPtrs[0] - txPtrs2[0]:X} {txPtrs[1] - txPtrs2[1]:X}");
+		var txPtrs = multiScanner.ScanText(GenericTxSignature, 2);
 		_chatTxHook = DalamudApi.Hooks.HookFromAddress<TxPrototype>(txPtrs[0], ChatTxDetour);
 		_zoneTxHook = DalamudApi.Hooks.HookFromAddress<TxPrototype>(txPtrs[1], ZoneTxDetour);
 		
-		var lobbyTxPtr = multiScanner2.ScanText(LobbyTxSignature, 1);
+		var lobbyTxPtr = multiScanner.ScanText(LobbyTxSignature, 1);
 		_lobbyTxHook = DalamudApi.Hooks.HookFromAddress<LobbyTxPrototype>(lobbyTxPtr[0], LobbyTxDetour);
-		
-		var networkInitPtr = multiScanner2.ScanText(NetworkInitSignature, 1);
-		_networkInitHook = DalamudApi.Hooks.HookFromAddress<NetworkInit>(networkInitPtr[0], NetworkInitDetour);
-		_networkInitHook.Enable();
 	}
 
 	public void Enable()
@@ -105,20 +84,12 @@ public unsafe class CaptureHookManager : IDisposable
 	public void Dispose()
 	{
 		Disable();
-		_networkInitHook?.Dispose();
 		_chatRxHook?.Dispose();
 		_lobbyRxHook?.Dispose();
 		_zoneRxHook?.Dispose();
 		_chatTxHook?.Dispose();
 		_lobbyTxHook?.Dispose();
 		_zoneTxHook?.Dispose();
-	}
-	
-	private void NetworkInitDetour(nint a1, nint a2, int a3, uint a4)
-	{
-		NetworkInitialized?.Invoke();
-		DalamudApi.PluginLog.Debug("Network reinitialized.");
-		_networkInitHook.Original(a1, a2, a3, a4);
 	}
 	
     private nuint ChatRxDetour(byte* data, byte* a2, nuint a3, nuint a4, nuint a5)
@@ -239,15 +210,19 @@ public unsafe class CaptureHookManager : IDisposable
             _buffer.Write(pktHdrSlice);
             var pktHdr = Util.Cast<byte, PacketElementHeader>(pktHdrSlice);
 
-            // DalamudApi.PluginLog.Debug($"packet: type {pktHdr.Type}, {pktHdr.Size} bytes, {pktHdr.SrcEntity} -> {pktHdr.DstEntity}");
+            DalamudApi.PluginLog.Debug($"packet: type {pktHdr.Type}, {pktHdr.Size} bytes, {proto} {direction}, {pktHdr.SrcEntity} -> {pktHdr.DstEntity}");
             
             var pktData = data.Slice(offset + pktHdrSize, (int)pktHdr.Size - pktHdrSize);
 
+            var isNetworkInit = proto == PacketProto.Lobby && direction == Direction.Rx && pktHdr.Type is PacketType.KeepAlive; 
             var canInitEncryption = proto == PacketProto.Lobby && pktHdr.Type is PacketType.EncryptionInit;
             var needsDecryption = proto == PacketProto.Lobby && pktHdr.Type is PacketType.Ipc or PacketType.Unknown_A;
             
+            if (isNetworkInit)
+	            NetworkInitialized?.Invoke();
+            
             if (canInitEncryption)
-                _encryptionProvider.Initialize(pktData);
+	            _encryptionProvider.Initialize(pktData);
             
             if (_encryptionProvider.Initialized && needsDecryption)
             {
@@ -263,5 +238,15 @@ public unsafe class CaptureHookManager : IDisposable
         
         // DalamudApi.PluginLog.Debug($"[{proto}{direction}] invoking network event header size {header.TotalSize} usize {header.DecompressedLength} buffer size {_buffer.GetBuffer().Length}");
         NetworkEvent?.Invoke(proto, direction, _buffer.GetBuffer());
+    }
+
+    // TODO: Find a hook or something better for this network nonsense
+    private void EncryptionInitReceived()
+    {
+	    var now = (ulong)Stopwatch.GetTimestamp();
+	    var elapsed = now - _lastEncryptionInitTick;
+	    if (elapsed < TimeSpan.FromSeconds(20.0).TotalMilliseconds) return;
+	    _lastEncryptionInitTick = now;
+	    NetworkInitialized?.Invoke();
     }
 }

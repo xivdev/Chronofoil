@@ -13,7 +13,7 @@ public class DalamudApi
     // [PluginService] public static IAetheryteList AetheryteList { get; private set; } = null;
     // [PluginService] public static IBuddyList BuddyList { get; private set; } = null;    
     // [PluginService] public static IChatGui ChatGui { get; private set; } = null;
-    // [PluginService] public static IClientState ClientState { get; private set; } = null;
+    [PluginService] public static IClientState ClientState { get; private set; } = null;
     [PluginService] public static ICommandManager CommandManager { get; private set; } = null;
     // [PluginService] public static ICondition Condition { get; private set; } = null;
     [PluginService] public static DalamudPluginInterface PluginInterface { get; private set; } = null;

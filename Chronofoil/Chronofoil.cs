@@ -8,7 +8,7 @@ namespace Chronofoil;
 
 public class Chronofoil : IDalamudPlugin
 {
-    private const string CommandName = "/pcf";
+    private const string CommandName = "/chronofoil";
 
     public static Configuration Configuration { get; private set; }
     
@@ -29,12 +29,6 @@ public class Chronofoil : IDalamudPlugin
         DalamudApi.PluginInterface.UiBuilder.Draw += DrawUI;
         DalamudApi.PluginInterface.UiBuilder.OpenConfigUi += DrawConfigUI;
         
-        var isOodleInitialized = Util.IsOodleInitialized();
-        if (isOodleInitialized)
-        {
-            DalamudApi.PluginLog.Error("Oodle has already been initialized. The plugin will load, but cannot function until Oodle is reinitialized.");
-        }
-
         _captureSessionManager = new CaptureSessionManager();
     }
     

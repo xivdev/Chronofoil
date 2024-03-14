@@ -7,12 +7,12 @@ namespace Chronofoil.Utility;
 
 public static class Util
 {
-	public static unsafe bool IsOodleInitialized()
-	{
-		const string oodleAllocFuncsInitSig = "80 3D ?? ?? ?? ?? ?? 75 1A 48 8D 15";
-		var oodleAllocFuncsInitPtr = (byte*) DalamudApi.SigScanner.GetStaticAddressFromSig(oodleAllocFuncsInitSig);
-		return oodleAllocFuncsInitPtr == (void*)0 || *oodleAllocFuncsInitPtr == 1;
-	}
+	// public static unsafe bool IsOodleInitialized()
+	// {
+	// 	const string oodleAllocFuncsInitSig = "80 3D ?? ?? ?? ?? ?? 75 1A 48 8D 15";
+	// 	var oodleAllocFuncsInitPtr = (byte*) DalamudApi.SigScanner.GetStaticAddressFromSig(oodleAllocFuncsInitSig);
+	// 	return oodleAllocFuncsInitPtr == (void*)0 || *oodleAllocFuncsInitPtr == 1;
+	// }
 
 	public static unsafe T Read<T>(nint ptr) where T : struct
 	{

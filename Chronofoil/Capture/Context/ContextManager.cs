@@ -47,7 +47,6 @@ public unsafe class ContextManager : IDisposable
 		
 		var presentPtr = DalamudApi.SigScanner.ScanText(PresentSig);
 		_presentHook = DalamudApi.Hooks.HookFromAddress<PresentPrototype>(presentPtr, PresentDetour);
-		_presentHook.Enable();
 		
 		_lastCtx = 0;
 	}
@@ -58,6 +57,15 @@ public unsafe class ContextManager : IDisposable
 			_contextContainer.CaptureGuid = captureGuid;
 		_contextDir = Path.Combine(Chronofoil.Configuration.StorageDirectory, captureGuid.ToString(), "ctx");
 		Directory.CreateDirectory(_contextDir);
+		_presentHook?.Enable();
+	}
+
+	public void Stop()
+	{
+		_presentHook?.Disable();
+		_contextDir = null;
+		lock (_contextContainer)
+			_contextContainer.CaptureGuid = Guid.Empty;
 	}
 
 	public void Dispose()
