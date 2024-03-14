@@ -2,10 +2,14 @@
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Globalization;
+using System.IO;
+using System.Reflection.PortableExecutable;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
-using System.Text;
-using Dalamud;
+using Windows.Win32;
+using Windows.Win32.Foundation;
+using Windows.Win32.Storage.FileSystem;
+using Windows.Win32.System.Memory;
 using Dalamud.Game;
 
 namespace Chronofoil.Utility;
@@ -13,39 +17,26 @@ namespace Chronofoil.Utility;
 /// <summary>
 /// A SigScanner facilitates searching for memory signatures in a given ProcessModule.
 /// </summary>
-public class MultiSigScanner : IDisposable, IServiceType
+public class MultiSigScanner3 : IDisposable
 {
+    private const uint GENERIC_READ = 0x80000000;
+    
     private nint _moduleCopyPtr;
     private long _moduleCopyOffset;
-
-    /// <summary>
-    /// Initializes a new instance of the <see cref="SigScanner"/> class using the main module of the current process.
-    /// </summary>
-    /// <param name="doCopy">Whether or not to copy the module upon initialization for search operations to use, as to not get disturbed by possible hooks.</param>
-    public MultiSigScanner(bool doCopy = false)
-        : this(Process.GetCurrentProcess().MainModule!, doCopy)
-    {
-    }
 
     /// <summary>
     /// Initializes a new instance of the <see cref="SigScanner"/> class.
     /// </summary>
     /// <param name="module">The ProcessModule to be used for scanning.</param>
     /// <param name="doCopy">Whether or not to copy the module upon initialization for search operations to use, as to not get disturbed by possible hooks.</param>
-    public MultiSigScanner(ProcessModule module, bool doCopy = false)
+    public MultiSigScanner3(ProcessModule module)
     {
         Module = module;
         Is32BitProcess = !Environment.Is64BitProcess;
-        IsCopy = doCopy;
+        IsCopy = true;
 
-        // Limit the search space to .text section.
-        SetupSearchSpace(module);
-
-        if (IsCopy)
-            SetupCopiedSegments();
-
-        // Log.Verbose($"Module base: 0x{this.TextSectionBase.ToInt64():X}");
-        // Log.Verbose($"Module size: 0x{this.TextSectionSize:X}");
+        SetupSearchSpace();
+        SetupCopy();
     }
 
     /// <summary>
@@ -143,7 +134,7 @@ public class MultiSigScanner : IDisposable, IServiceType
         for (int i = 0; i < maxAddresses; i++)
         {
             var index = IndexOf(runningBase, size, needle, mask);
-            // DalamudApi.PluginLog.Debug($"[MultiSigScanner] IndexOf returned {index:X}");
+            // DalamudApi.PluginLog.Debug($"[MultiSigScanner3] IndexOf returned {index:X}");
             if (index < 0)
                 throw new KeyNotFoundException($"Can't find a signature of {signature}");
             var offset = index + needle.Length;
@@ -451,10 +442,10 @@ public class MultiSigScanner : IDisposable, IServiceType
             badShift[needle[idx]] = last - idx;
         return badShift;
     }
-
-    private void SetupSearchSpace(ProcessModule module)
+    
+    private void SetupSearchSpace()
     {
-        var baseAddress = module.BaseAddress;
+        var baseAddress = Module.BaseAddress;
 
         // We don't want to read all of IMAGE_DOS_HEADER or IMAGE_NT_HEADER stuff so we cheat here.
         var ntNewOffset = Marshal.ReadInt32(baseAddress, 0x3C);
@@ -499,30 +490,74 @@ public class MultiSigScanner : IDisposable, IServiceType
             sectionCursor += 40;
         }
         
-        // DalamudApi.PluginLog.Debug($"[MultiSigScanner] TextSectionOffset: 0x{this.TextSectionOffset:X}");
-        // DalamudApi.PluginLog.Debug($"[MultiSigScanner] TextSectionSize: 0x{this.TextSectionSize:X}");
-        // DalamudApi.PluginLog.Debug($"[MultiSigScanner] DataSectionOffset: 0x{this.DataSectionOffset:X}");
-        // DalamudApi.PluginLog.Debug($"[MultiSigScanner] DataSectionSize: 0x{this.DataSectionSize:X}");
-        // DalamudApi.PluginLog.Debug($"[MultiSigScanner] RDataSectionOffset: 0x{this.RDataSectionOffset:X}");
-        // DalamudApi.PluginLog.Debug($"[MultiSigScanner] RDataSectionSize: 0x{this.RDataSectionSize:X}");
+        // DalamudApi.PluginLog.Debug($"[MultiSigScanner3] TextSectionOffset: 0x{this.TextSectionOffset:X}");
+        // DalamudApi.PluginLog.Debug($"[MultiSigScanner3] TextSectionSize: 0x{this.TextSectionSize:X}");
+        // DalamudApi.PluginLog.Debug($"[MultiSigScanner3] DataSectionOffset: 0x{this.DataSectionOffset:X}");
+        // DalamudApi.PluginLog.Debug($"[MultiSigScanner3] DataSectionSize: 0x{this.DataSectionSize:X}");
+        // DalamudApi.PluginLog.Debug($"[MultiSigScanner3] RDataSectionOffset: 0x{this.RDataSectionOffset:X}");
+        // DalamudApi.PluginLog.Debug($"[MultiSigScanner3] RDataSectionSize: 0x{this.RDataSectionSize:X}");
     }
 
-    private unsafe void SetupCopiedSegments()
+    private void SetupCopy()
     {
+        var handle = PInvoke.CreateFile(Module.FileName,
+                GENERIC_READ,
+                FILE_SHARE_MODE.FILE_SHARE_READ, 
+                null,
+                FILE_CREATION_DISPOSITION.OPEN_EXISTING,
+                FILE_FLAGS_AND_ATTRIBUTES.FILE_ATTRIBUTE_NORMAL,
+                null);
+
+        if (handle.IsInvalid)
+        {
+            DalamudApi.PluginLog.Error($"[MultiSigScanner3] Failed to open file handle for {Module.FileName}");
+            return;
+        }
+        
+        var map = PInvoke.CreateFileMapping(handle,
+            null,
+            PAGE_PROTECTION_FLAGS.PAGE_READONLY | PAGE_PROTECTION_FLAGS.SEC_IMAGE,
+            0,
+            0,
+            null);
+        
+        if (map.IsInvalid)
+        {
+            DalamudApi.PluginLog.Error($"[MultiSigScanner3] Failed to create file mapping for {Module.FileName}");
+            return;
+        }
+
+        var view = PInvoke.MapViewOfFile(map,
+            FILE_MAP.FILE_MAP_COPY,
+            0,
+            0,
+            0);
+        
         // .text
         this._moduleCopyPtr = Marshal.AllocHGlobal(this.Module.ModuleMemorySize);
-        // DalamudApi.PluginLog.Debug($"[MultiSigScanner] Copying block of size {this.Module.ModuleMemorySize} from 0x{this.Module.BaseAddress.ToInt64():X} to 0x{this._moduleCopyPtr.ToInt64():X}");
         
-        var data = (byte*) this.Module.BaseAddress.ToPointer();
-        // DalamudApi.PluginLog.Debug($"[MultiSigScanner] First 16 bytes of data: {Util.ByteString(data, 0, 16)}");
-        
-        Buffer.MemoryCopy(
-            this.Module.BaseAddress.ToPointer(),
-            this._moduleCopyPtr.ToPointer(),
-            this.Module.ModuleMemorySize,
-            this.Module.ModuleMemorySize);
+        unsafe
+        {
+            if (view.Value == null)
+            {
+                DalamudApi.PluginLog.Error($"[MultiSigScanner3] Failed to map view of file for {Module.FileName}");
+                DalamudApi.PluginLog.Error($"[MultiSigScanner3] Marshal.GetLastWin32Error(): {Marshal.GetLastWin32Error()}");
+                DalamudApi.PluginLog.Error($"[MultiSigScanner3] Marshal.GetLastPInvokeError(): {Marshal.GetLastPInvokeError()}");
+                DalamudApi.PluginLog.Error($"[MultiSigScanner3] Marshal.GetLastPInvokeErrorMessage(): {Marshal.GetLastPInvokeErrorMessage()}");
+                return;
+            }
+            
+            Buffer.MemoryCopy(
+                (byte*)view.Value,
+                this._moduleCopyPtr.ToPointer(),
+                this.Module.ModuleMemorySize,
+                this.Module.ModuleMemorySize);
+            // DalamudApi.PluginLog.Debug($"[MultiSigScanner3] First 16 bytes of data: {Util.ByteString((byte*)_moduleCopyPtr, 0, 16)}");
+        }
 
         this._moduleCopyOffset = this._moduleCopyPtr.ToInt64() - this.Module.BaseAddress.ToInt64();
-        // DalamudApi.PluginLog.Debug($"[MultiSigScanner] Offset is 0x{this._moduleCopyOffset:X} ({_moduleCopyPtr.ToInt64()} - {Module.BaseAddress.ToInt64()})");
+        // DalamudApi.PluginLog.Debug($"[MultiSigScanner3] Offset is 0x{this._moduleCopyOffset:X} ({_moduleCopyPtr.ToInt64()} - {Module.BaseAddress.ToInt64()})");
+        PInvoke.CloseHandle((HANDLE)handle.DangerousGetHandle());
+        PInvoke.CloseHandle((HANDLE)map.DangerousGetHandle());
     }
 }

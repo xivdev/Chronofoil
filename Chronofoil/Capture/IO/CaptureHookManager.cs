@@ -42,6 +42,7 @@ public unsafe class CaptureHookManager : IDisposable
 	public CaptureHookManager()
 	{
 		var multiScanner = new MultiSigScanner(Process.GetCurrentProcess().MainModule, true);
+		var multiScanner2 = new MultiSigScanner3(Process.GetCurrentProcess().MainModule);
 		_buffer = new SimpleBuffer(1024 * 1024);
 		
 		var lobbyKeyPtr = DalamudApi.SigScanner.ScanText(LobbyKeySignature);
@@ -49,20 +50,35 @@ public unsafe class CaptureHookManager : IDisposable
 		_encryptionProvider = new LobbyEncryptionProvider(lobbyKey);
 		DalamudApi.PluginLog.Debug($"[CaptureHooks] Lobby key is {lobbyKey}.");
 		
-		var rxPtrs = multiScanner.ScanText(GenericRxSignature, 3);
+		// var rxPtrs = multiScanner.ScanText(GenericRxSignature, 3);
+		var rxPtrs = multiScanner2.ScanText(GenericRxSignature, 3);
+		// DalamudApi.PluginLog.Debug($"rxPtrs : {rxPtrs[0]:X} {rxPtrs[1]:X} {rxPtrs[2]:X}");
+		// DalamudApi.PluginLog.Debug($"rxPtrs2: {rxPtrs2[0]:X} {rxPtrs2[1]:X} {rxPtrs2[2]:X}");
+		// DalamudApi.PluginLog.Debug($"Off by : {rxPtrs[0] - rxPtrs2[0]:X} {rxPtrs[1] - rxPtrs2[1]:X} {rxPtrs[2] - rxPtrs2[2]:X}");
+		// DalamudApi.PluginLog.Debug($"rxPtrs[0]: {Util.ByteString((byte*)rxPtrs[0].ToPointer(), 0, 16)}");
+		// DalamudApi.PluginLog.Debug($"rxPtrs2[0]: {Util.ByteString((byte*)rxPtrs2[0].ToPointer(), 0, 16)}");
+		// DalamudApi.PluginLog.Debug($"rxPtrs[1]: {Util.ByteString((byte*)rxPtrs[1].ToPointer(), 0, 16)}");
+		// DalamudApi.PluginLog.Debug($"rxPtrs2[1]: {Util.ByteString((byte*)rxPtrs2[1].ToPointer(), 0, 16)}");
+		// DalamudApi.PluginLog.Debug($"rxPtrs[2]: {Util.ByteString((byte*)rxPtrs[2].ToPointer(), 0, 16)}");
+		// DalamudApi.PluginLog.Debug($"rxPtrs2[2]: {Util.ByteString((byte*)rxPtrs2[2].ToPointer(), 0, 16)}");
+		
 		_chatRxHook = DalamudApi.Hooks.HookFromAddress<RxPrototype>(rxPtrs[0], ChatRxDetour);
 		_lobbyRxHook = DalamudApi.Hooks.HookFromAddress<RxPrototype>(rxPtrs[1], LobbyRxDetour);
 		_zoneRxHook = DalamudApi.Hooks.HookFromAddress<RxPrototype>(rxPtrs[2], ZoneRxDetour);
 		
-		var txPtrs = multiScanner.ScanText(GenericTxSignature, 2);
+		// var txPtrs = multiScanner.ScanText(GenericTxSignature, 2);
+		var txPtrs = multiScanner2.ScanText(GenericTxSignature, 2);
+		// DalamudApi.PluginLog.Debug($"txPtrs : {txPtrs[0]:X} {txPtrs[1]:X}");
+		// DalamudApi.PluginLog.Debug($"txPtrs2: {txPtrs2[0]:X} {txPtrs2[1]:X}");
+		// DalamudApi.PluginLog.Debug($"Off by : {txPtrs[0] - txPtrs2[0]:X} {txPtrs[1] - txPtrs2[1]:X}");
 		_chatTxHook = DalamudApi.Hooks.HookFromAddress<TxPrototype>(txPtrs[0], ChatTxDetour);
 		_zoneTxHook = DalamudApi.Hooks.HookFromAddress<TxPrototype>(txPtrs[1], ZoneTxDetour);
 		
-		var lobbyTxPtr = DalamudApi.SigScanner.ScanText(LobbyTxSignature);
-		_lobbyTxHook = DalamudApi.Hooks.HookFromAddress<LobbyTxPrototype>(lobbyTxPtr, LobbyTxDetour);
+		var lobbyTxPtr = multiScanner2.ScanText(LobbyTxSignature, 1);
+		_lobbyTxHook = DalamudApi.Hooks.HookFromAddress<LobbyTxPrototype>(lobbyTxPtr[0], LobbyTxDetour);
 		
-		var networkInitPtr = DalamudApi.SigScanner.ScanText(NetworkInitSignature);
-		_networkInitHook = DalamudApi.Hooks.HookFromAddress<NetworkInit>(networkInitPtr, NetworkInitDetour);
+		var networkInitPtr = multiScanner2.ScanText(NetworkInitSignature, 1);
+		_networkInitHook = DalamudApi.Hooks.HookFromAddress<NetworkInit>(networkInitPtr[0], NetworkInitDetour);
 		_networkInitHook.Enable();
 	}
 

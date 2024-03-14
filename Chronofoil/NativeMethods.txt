@@ -1,0 +1,4 @@
+﻿MapViewOfFile
+CreateFileMappingW
+CreateFileW
+ReadFile

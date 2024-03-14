@@ -41,6 +41,16 @@ public static class Util
 		return sb.ToString();
 	}
 	
+	public static unsafe string ByteString(byte* data, int offset, int length)
+	{
+		var sb = new StringBuilder();
+		for (int i = offset; i < length; i++)
+		{
+			sb.Append($"{data[i]:X2}");
+		}
+		return sb.ToString();
+	}
+	
 	public static string GetHumanByteString(ulong bytes)
 	{
 		return bytes switch
