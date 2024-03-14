@@ -1,0 +1,10 @@
+name: Chronofoil
+internal_name: Chronofoil
+author: perchbird
+#load_required_state: 2
+#load_priority: 10
+#load_sync: true
+punchline: Crowdsourced packet capturing tool
+description: |-
+  /pchrono
+repo_url: https://github.com/xivdev/Chronofoil
