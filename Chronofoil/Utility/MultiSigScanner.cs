@@ -25,13 +25,11 @@ public class MultiSigScanner : IDisposable
     private long _moduleCopyOffset;
 
     /// <summary>
-    /// Initializes a new instance of the <see cref="SigScanner"/> class.
+    /// Initializes a new instance of the <see cref="MultiSigScanner"/> class.
     /// </summary>
-    /// <param name="module">The ProcessModule to be used for scanning.</param>
-    /// <param name="doCopy">Whether or not to copy the module upon initialization for search operations to use, as to not get disturbed by possible hooks.</param>
-    public MultiSigScanner(ProcessModule module)
+    public MultiSigScanner()
     {
-        Module = module;
+        Module = Process.GetCurrentProcess().MainModule;
         Is32BitProcess = !Environment.Is64BitProcess;
         IsCopy = true;
 
@@ -510,7 +508,7 @@ public class MultiSigScanner : IDisposable
 
         if (handle.IsInvalid)
         {
-            DalamudApi.PluginLog.Error($"[MultiSigScanner] Failed to open file handle for {Module.FileName}");
+            // DalamudApi.PluginLog.Error($"[MultiSigScanner] Failed to open file handle for {Module.FileName}");
             return;
         }
         
@@ -523,7 +521,7 @@ public class MultiSigScanner : IDisposable
         
         if (map.IsInvalid)
         {
-            DalamudApi.PluginLog.Error($"[MultiSigScanner] Failed to create file mapping for {Module.FileName}");
+            // DalamudApi.PluginLog.Error($"[MultiSigScanner] Failed to create file mapping for {Module.FileName}");
             return;
         }
 
@@ -540,10 +538,10 @@ public class MultiSigScanner : IDisposable
         {
             if (view.Value == null)
             {
-                DalamudApi.PluginLog.Error($"[MultiSigScanner] Failed to map view of file for {Module.FileName}");
-                DalamudApi.PluginLog.Error($"[MultiSigScanner] Marshal.GetLastWin32Error(): {Marshal.GetLastWin32Error()}");
-                DalamudApi.PluginLog.Error($"[MultiSigScanner] Marshal.GetLastPInvokeError(): {Marshal.GetLastPInvokeError()}");
-                DalamudApi.PluginLog.Error($"[MultiSigScanner] Marshal.GetLastPInvokeErrorMessage(): {Marshal.GetLastPInvokeErrorMessage()}");
+                // DalamudApi.PluginLog.Error($"[MultiSigScanner] Failed to map view of file for {Module.FileName}");
+                // DalamudApi.PluginLog.Error($"[MultiSigScanner] Marshal.GetLastWin32Error(): {Marshal.GetLastWin32Error()}");
+                // DalamudApi.PluginLog.Error($"[MultiSigScanner] Marshal.GetLastPInvokeError(): {Marshal.GetLastPInvokeError()}");
+                // DalamudApi.PluginLog.Error($"[MultiSigScanner] Marshal.GetLastPInvokeErrorMessage(): {Marshal.GetLastPInvokeErrorMessage()}");
                 return;
             }
             

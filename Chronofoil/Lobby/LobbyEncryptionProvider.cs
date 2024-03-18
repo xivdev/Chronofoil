@@ -6,11 +6,11 @@ namespace Chronofoil.Lobby;
 public class LobbyEncryptionProvider
 {
     public bool Initialized { get; private set; }
-    private readonly ushort _gameVersion;
+    private ushort _gameVersion;
     private Blowfish _blowfish;
     private byte[] _initPacket;
 
-    public LobbyEncryptionProvider(ushort gameVersion)
+    public void SetGameVersion(ushort gameVersion)
     {
         _gameVersion = gameVersion;
     }

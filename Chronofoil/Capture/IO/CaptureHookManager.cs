@@ -1,10 +1,12 @@
 ﻿using System;
-using System.Diagnostics;
 using System.Runtime.CompilerServices;
 using Dalamud.Hooking;
 using Chronofoil.Lobby;
 using Chronofoil.Packet;
 using Chronofoil.Utility;
+using Dalamud.Game;
+using Dalamud.Interface;
+using Dalamud.Plugin.Services;
 
 namespace Chronofoil.Capture.IO;
 
@@ -33,32 +35,42 @@ public unsafe class CaptureHookManager : IDisposable
 	private readonly Hook<LobbyTxPrototype> _lobbyTxHook;
 	private readonly Hook<TxPrototype> _zoneTxHook;
 
+	private readonly IPluginLog _log;
 	private readonly LobbyEncryptionProvider _encryptionProvider;
+	private readonly UiBuilder _uiBuilder;
 	private readonly SimpleBuffer _buffer;
-	private ulong _lastEncryptionInitTick = 0;
 
-	public CaptureHookManager()
+	public CaptureHookManager(
+		IPluginLog log,
+		LobbyEncryptionProvider encryptionProvider,
+		UiBuilder uiBuilder,
+		MultiSigScanner multiScanner,
+		ISigScanner sigScanner,
+		IGameInteropProvider hooks)
 	{
-		var multiScanner = new MultiSigScanner(Process.GetCurrentProcess().MainModule);
+		_log = log;
+		_encryptionProvider = encryptionProvider;
+		_uiBuilder = uiBuilder;
+		
 		_buffer = new SimpleBuffer(1024 * 1024);
 		
-		var lobbyKeyPtr = DalamudApi.SigScanner.ScanText(LobbyKeySignature);
+		var lobbyKeyPtr = sigScanner.ScanText(LobbyKeySignature);
 		var lobbyKey = (ushort) *(int*)(lobbyKeyPtr + 3); // skip instructions and register offset
-		_encryptionProvider = new LobbyEncryptionProvider(lobbyKey);
-		DalamudApi.PluginLog.Debug($"[CaptureHooks] Lobby key is {lobbyKey}.");
+		_encryptionProvider.SetGameVersion(lobbyKey);
+		_log.Debug($"[CaptureHooks] Lobby key is {lobbyKey}.");
 		
 		var rxPtrs = multiScanner.ScanText(GenericRxSignature, 3);
 
-		_chatRxHook = DalamudApi.Hooks.HookFromAddress<RxPrototype>(rxPtrs[0], ChatRxDetour);
-		_lobbyRxHook = DalamudApi.Hooks.HookFromAddress<RxPrototype>(rxPtrs[1], LobbyRxDetour);
-		_zoneRxHook = DalamudApi.Hooks.HookFromAddress<RxPrototype>(rxPtrs[2], ZoneRxDetour);
+		_chatRxHook = hooks.HookFromAddress<RxPrototype>(rxPtrs[0], ChatRxDetour);
+		_lobbyRxHook = hooks.HookFromAddress<RxPrototype>(rxPtrs[1], LobbyRxDetour);
+		_zoneRxHook = hooks.HookFromAddress<RxPrototype>(rxPtrs[2], ZoneRxDetour);
 		
 		var txPtrs = multiScanner.ScanText(GenericTxSignature, 2);
-		_chatTxHook = DalamudApi.Hooks.HookFromAddress<TxPrototype>(txPtrs[0], ChatTxDetour);
-		_zoneTxHook = DalamudApi.Hooks.HookFromAddress<TxPrototype>(txPtrs[1], ZoneTxDetour);
+		_chatTxHook = hooks.HookFromAddress<TxPrototype>(txPtrs[0], ChatTxDetour);
+		_zoneTxHook = hooks.HookFromAddress<TxPrototype>(txPtrs[1], ZoneTxDetour);
 		
 		var lobbyTxPtr = multiScanner.ScanText(LobbyTxSignature, 1);
-		_lobbyTxHook = DalamudApi.Hooks.HookFromAddress<LobbyTxPrototype>(lobbyTxPtr[0], LobbyTxDetour);
+		_lobbyTxHook = hooks.HookFromAddress<LobbyTxPrototype>(lobbyTxPtr[0], LobbyTxDetour);
 	}
 
 	public void Enable()
@@ -94,7 +106,7 @@ public unsafe class CaptureHookManager : IDisposable
 	
     private nuint ChatRxDetour(byte* data, byte* a2, nuint a3, nuint a4, nuint a5)
     {
-	    // DalamudApi.PluginLog.Debug($"ChatRxDetour: {(long)data:X} {(long)a2:X} {a3:X} {a4:X} {a5:X}");
+	    // _log.Debug($"ChatRxDetour: {(long)data:X} {(long)a2:X} {a3:X} {a4:X} {a5:X}");
 	    var ret = _chatRxHook.Original(data, a2, a3, a4, a5);
 	    
 	    var packetOffset = *(uint*)(data + 28);
@@ -107,7 +119,7 @@ public unsafe class CaptureHookManager : IDisposable
     
     private nuint LobbyRxDetour(byte* data, byte* a2, nuint a3, nuint a4, nuint a5)
     {
-	    // DalamudApi.PluginLog.Debug($"LobbyRxDetour: {(long)data:X} {(long)a2:X} {a3:X} {a4:X} {a5:X}");
+	    // _log.Debug($"LobbyRxDetour: {(long)data:X} {(long)a2:X} {a3:X} {a4:X} {a5:X}");
 
 	    var packetOffset = *(uint*)(data + 28);
 	    if (packetOffset != 0) return _lobbyRxHook.Original(data, a2, a3, a4, a5);
@@ -119,7 +131,7 @@ public unsafe class CaptureHookManager : IDisposable
     
     private nuint ZoneRxDetour(byte* data, byte* a2, nuint a3, nuint a4, nuint a5)
     {
-	    // DalamudApi.PluginLog.Debug($"ZoneRxDetour: {(long)data:X} {(long)a2:X} {a3:X} {a4:X} {a5:X}");
+	    // _log.Debug($"ZoneRxDetour: {(long)data:X} {(long)a2:X} {a3:X} {a4:X} {a5:X}");
 	    var ret = _zoneRxHook.Original(data, a2, a3, a4, a5);
 
 	    var packetOffset = *(uint*)(data + 28);
@@ -132,7 +144,7 @@ public unsafe class CaptureHookManager : IDisposable
     
     private nuint ChatTxDetour(byte* data, byte* a2, nuint a3, nuint a4, nuint a5, nuint a6)
     {
-	    // DalamudApi.PluginLog.Debug($"ChatTxDetour: {(long)data:X} {(long)a2:X} {a3:X} {a4:X} {a5:X} {a6:X}");
+	    // _log.Debug($"ChatTxDetour: {(long)data:X} {(long)a2:X} {a3:X} {a4:X} {a5:X} {a6:X}");
 	    var ptr = (nuint*)data;
         ptr += 2;
         PacketsFromFrame(PacketProto.Chat, Direction.Tx, (byte*) *ptr);
@@ -142,7 +154,7 @@ public unsafe class CaptureHookManager : IDisposable
     
     private void LobbyTxDetour(nuint data)
     {
-	    // DalamudApi.PluginLog.Debug($"LobbyTxDetour: {data:X}");
+	    // _log.Debug($"LobbyTxDetour: {data:X}");
         _lobbyTxHook.Original(data);
         
         var ptr = data + 32;
@@ -152,7 +164,7 @@ public unsafe class CaptureHookManager : IDisposable
     
     private nuint ZoneTxDetour(byte* data, byte* a2, nuint a3, nuint a4, nuint a5, nuint a6)
     {
-	    // DalamudApi.PluginLog.Debug($"ZoneTxDetour: {(long)data:X} {(long)a2:X} {a3:X} {a4:X} {a5:X} {a6:X}");
+	    // _log.Debug($"ZoneTxDetour: {(long)data:X} {(long)a2:X} {a3:X} {a4:X} {a5:X} {a6:X}");
 	    var ptr = (nuint*)data;
         ptr += 2;
         PacketsFromFrame(PacketProto.Zone, Direction.Tx, (byte*) *ptr);
@@ -168,16 +180,16 @@ public unsafe class CaptureHookManager : IDisposable
         }
         catch (Exception e)
         {
-            DalamudApi.PluginLog.Error(e, "[PacketsFromFrame] Error!!!!!!!!!!!!!!!!!!");
+            _log.Error(e, "[PacketsFromFrame] Error!!!!!!!!!!!!!!!!!!");
         }
     }
     
     private void PacketsFromFrame2(PacketProto proto, Direction direction, byte* framePtr)
     {
-	    // DalamudApi.PluginLog.Debug($"PacketsFromFrame: {(long)framePtr:X} {proto} {direction}");
+	    // _log.Debug($"PacketsFromFrame: {(long)framePtr:X} {proto} {direction}");
         if ((nuint)framePtr == 0)
         {
-            DalamudApi.PluginLog.Error("null ptr");
+            _log.Error("null ptr");
             return;
         }
         _buffer.Clear();
@@ -187,18 +199,18 @@ public unsafe class CaptureHookManager : IDisposable
         _buffer.Write(headerSpan);
         
         var header = Util.Cast<byte, PackedPacketHeader>(headerSpan);
-        // DalamudApi.PluginLog.Debug($"PacketsFromFrame: writing {header.Count} packets");
+        // _log.Debug($"PacketsFromFrame: writing {header.Count} packets");
         var span = new Span<byte>(framePtr, (int)header.TotalSize);
         
-        // DalamudApi.PluginLog.Debug($"[{(nuint)framePtr:X}] [{proto}{direction}] proto {header.Protocol} unk {header.Unknown}, {header.Count} pkts size {header.TotalSize} usize {header.DecompressedLength}");
+        // _log.Debug($"[{(nuint)framePtr:X}] [{proto}{direction}] proto {header.Protocol} unk {header.Unknown}, {header.Count} pkts size {header.TotalSize} usize {header.DecompressedLength}");
         
         var data = span.Slice(headerSize, (int)header.TotalSize - headerSize);
         
         // Compression
         if (header.Compression != CompressionType.None)
         {
-            DalamudApi.PluginInterface.UiBuilder.AddNotification($"[{proto}{direction}] A frame was compressed.", "Chronofoil Error");
-            // DalamudApi.PluginLog.Debug($"frame compressed: {header.Compression} payload is {header.TotalSize - 40} bytes, decomp'd is {header.DecompressedLength}");
+            _uiBuilder.AddNotification($"[{proto}{direction}] A frame was compressed.", "Chronofoil Error");
+            // _log.Debug($"frame compressed: {header.Compression} payload is {header.TotalSize - 40} bytes, decomp'd is {header.DecompressedLength}");
             return;
         }
 
@@ -210,7 +222,7 @@ public unsafe class CaptureHookManager : IDisposable
             _buffer.Write(pktHdrSlice);
             var pktHdr = Util.Cast<byte, PacketElementHeader>(pktHdrSlice);
 
-            DalamudApi.PluginLog.Debug($"packet: type {pktHdr.Type}, {pktHdr.Size} bytes, {proto} {direction}, {pktHdr.SrcEntity} -> {pktHdr.DstEntity}");
+            _log.Debug($"packet: type {pktHdr.Type}, {pktHdr.Size} bytes, {proto} {direction}, {pktHdr.SrcEntity} -> {pktHdr.DstEntity}");
             
             var pktData = data.Slice(offset + pktHdrSize, (int)pktHdr.Size - pktHdrSize);
 
@@ -232,21 +244,11 @@ public unsafe class CaptureHookManager : IDisposable
             
             _buffer.Write(pktData);
             
-            // DalamudApi.PluginLog.Debug($"packet: type {pktHdr.Type}, {pktHdr.Size} bytes, {pktHdr.SrcEntity} -> {pktHdr.DstEntity}");
+            // _log.Debug($"packet: type {pktHdr.Type}, {pktHdr.Size} bytes, {pktHdr.SrcEntity} -> {pktHdr.DstEntity}");
             offset += (int)pktHdr.Size;
         }
         
-        // DalamudApi.PluginLog.Debug($"[{proto}{direction}] invoking network event header size {header.TotalSize} usize {header.DecompressedLength} buffer size {_buffer.GetBuffer().Length}");
+        // _log.Debug($"[{proto}{direction}] invoking network event header size {header.TotalSize} usize {header.DecompressedLength} buffer size {_buffer.GetBuffer().Length}");
         NetworkEvent?.Invoke(proto, direction, _buffer.GetBuffer());
-    }
-
-    // TODO: Find a hook or something better for this network nonsense
-    private void EncryptionInitReceived()
-    {
-	    var now = (ulong)Stopwatch.GetTimestamp();
-	    var elapsed = now - _lastEncryptionInitTick;
-	    if (elapsed < TimeSpan.FromSeconds(20.0).TotalMilliseconds) return;
-	    _lastEncryptionInitTick = now;
-	    NetworkInitialized?.Invoke();
     }
 }

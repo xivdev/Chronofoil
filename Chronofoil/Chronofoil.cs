@@ -3,39 +3,40 @@ using Dalamud.Plugin;
 using Dalamud.IoC;
 using Chronofoil.Capture;
 using Chronofoil.Utility;
+using Dalamud.Interface;
+using Dalamud.Plugin.Services;
 
 namespace Chronofoil;
 
-public class Chronofoil : IDalamudPlugin
+public class Chronofoil
 {
     private const string CommandName = "/chronofoil";
-
-    public static Configuration Configuration { get; private set; }
     
+    private readonly ICommandManager _commandManager;
+    private readonly UiBuilder _uiBuilder;
     private readonly CaptureSessionManager _captureSessionManager;
-
-    public Chronofoil([RequiredVersion("1.0")] DalamudPluginInterface pluginInterface)
+    
+    public Chronofoil(
+        ICommandManager commandManager,
+        UiBuilder uiBuilder, 
+        CaptureSessionManager captureSessionManager)
     {
-        DalamudApi.Initialize(pluginInterface);
+        _commandManager = commandManager;
+        _uiBuilder = uiBuilder;
+        _captureSessionManager = captureSessionManager;
         
-        Configuration = DalamudApi.PluginInterface.GetPluginConfig() as Configuration ?? new Configuration();
-        Configuration.Initialize(DalamudApi.PluginInterface);
-        
-        DalamudApi.CommandManager.AddHandler(CommandName, new CommandInfo(OnCommand)
+        _commandManager.AddHandler(CommandName, new CommandInfo(OnCommand)
         {
             HelpMessage = "Opens the Chronofoil UI.",
         });
 
-        DalamudApi.PluginInterface.UiBuilder.Draw += DrawUI;
-        DalamudApi.PluginInterface.UiBuilder.OpenConfigUi += DrawConfigUI;
-        
-        _captureSessionManager = new CaptureSessionManager();
+        _uiBuilder.Draw += DrawUI;
+        _uiBuilder.OpenConfigUi += DrawConfigUI;
     }
     
     public void Dispose()
     {
-        DalamudApi.CommandManager.RemoveHandler(CommandName);
-        _captureSessionManager.Dispose();
+        _commandManager.RemoveHandler(CommandName);
     }
 
     private void OnCommand(string command, string args)

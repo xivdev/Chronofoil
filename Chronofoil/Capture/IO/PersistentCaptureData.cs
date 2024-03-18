@@ -54,14 +54,15 @@ public class PersistentCaptureData
 		Ex2GameVer = GetVer(ex2VerFile);
 		Ex3GameVer = GetVer(ex3VerFile);
 		Ex4GameVer = GetVer(ex4VerFile);
-		PluginVersion = AssemblyName.GetAssemblyName(DalamudApi.PluginInterface.AssemblyLocation.FullName).Version.ToString();
+		PluginVersion = Assembly.GetExecutingAssembly().GetName().Version.ToString();
+		Logging.Debug($"testing logging5, {PluginVersion}");
 	}
 	
 	private static ulong GetBuild(byte[] data)
 	{
-		byte[] bytes = {0x2F, 0x2A, 0x2A, 0x2A, 0x2A, 0x2A, 0x66, 0x66, 0x31, 0x34, 0x2A, 0x2A, 0x2A, 0x2A, 0x2A, 0x2A, 0x72, 0x65, 0x76};
+		var bytes = "/*****ff14******rev"u8.ToArray();
 		var stringBytes = new List<byte>();
-		for(int i = 0; i < data.Length - bytes.Length; i++) {
+		for (int i = 0; i < data.Length - bytes.Length; i++) {
 			if (data.AsSpan().Slice(i, bytes.Length).SequenceEqual(bytes))
 			{
 				i += bytes.Length;
