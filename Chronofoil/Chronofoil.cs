@@ -1,55 +1,46 @@
 ﻿using Dalamud.Game.Command;
-using Dalamud.Plugin;
-using Dalamud.IoC;
-using Chronofoil.Capture;
-using Chronofoil.Utility;
+using Chronofoil.UI;
+using Dalamud.Plugin.Services;
 
 namespace Chronofoil;
 
-public class Chronofoil : IDalamudPlugin
+public class Chronofoil
 {
     private const string CommandName = "/chronofoil";
-
-    public static Configuration Configuration { get; private set; }
     
-    private readonly CaptureSessionManager _captureSessionManager;
-
-    public Chronofoil([RequiredVersion("1.0")] DalamudPluginInterface pluginInterface)
+    private readonly ICommandManager _commandManager;
+    private readonly ChronofoilUI _ui;
+    
+    public Chronofoil(
+        ICommandManager commandManager,
+        ChronofoilUI ui)
     {
-        DalamudApi.Initialize(pluginInterface);
+        _commandManager = commandManager;
+        _ui = ui;
         
-        Configuration = DalamudApi.PluginInterface.GetPluginConfig() as Configuration ?? new Configuration();
-        Configuration.Initialize(DalamudApi.PluginInterface);
-        
-        DalamudApi.CommandManager.AddHandler(CommandName, new CommandInfo(OnCommand)
+        _commandManager.AddHandler(CommandName, new CommandInfo(OnCommand)
         {
-            HelpMessage = "Opens the Chronofoil UI.",
+            HelpMessage = "Chronofoil general command.",
         });
-
-        DalamudApi.PluginInterface.UiBuilder.Draw += DrawUI;
-        DalamudApi.PluginInterface.UiBuilder.OpenConfigUi += DrawConfigUI;
-        
-        _captureSessionManager = new CaptureSessionManager();
     }
     
     public void Dispose()
     {
-        DalamudApi.CommandManager.RemoveHandler(CommandName);
-        _captureSessionManager.Dispose();
+        _commandManager.RemoveHandler(CommandName);
     }
 
     private void OnCommand(string command, string args)
     {
-        
-    }
-
-    private void DrawUI()
-    {
-        
-    }
-
-    private void DrawConfigUI()
-    {
-        
+        switch (args)
+        {
+            case "monitor":
+                _ui.ShowMonitorWindow();    
+                break;
+            case "config" or "settings":
+                _ui.ShowSettingsWindow();
+                break;
+            default:
+                break;
+        }
     }
 }

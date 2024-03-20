@@ -2,6 +2,7 @@
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Text;
+using Dalamud.Plugin.Services;
 
 namespace Chronofoil.Utility;
 
@@ -21,14 +22,14 @@ public static class Util
 		return MemoryMarshal.Cast<byte, T>(span)[0];
 	}
 	
-	public static U Cast<T, U>(Span<T> input) where T : struct where U : struct
+	public static U Cast<T, U>(ReadOnlySpan<T> input) where T : struct where U : struct
 	{
 		return MemoryMarshal.Cast<T, U>(input)[0];
 	}
 
-	public static void LogBytes(ReadOnlySpan<byte> data, int offset, int length)
+	public static void LogBytes(IPluginLog log, ReadOnlySpan<byte> data, int offset, int length)
 	{
-		DalamudApi.PluginLog.Debug($"{ByteString(data, offset, length)}");
+		log.Debug($"{ByteString(data, offset, length)}");
 	}
 
 	public static string ByteString(ReadOnlySpan<byte> data, int offset, int length)

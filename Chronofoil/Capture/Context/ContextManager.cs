@@ -4,8 +4,10 @@ using System.IO;
 using System.Runtime.InteropServices;
 using System.Threading;
 using System.Threading.Tasks;
+using Dalamud.Game;
 using Dalamud.Hooking;
 using Dalamud.Logging;
+using Dalamud.Plugin.Services;
 using FFXIVClientStructs.FFXIV.Component.GUI;
 using SharpDX.Direct3D11;
 using SixLabors.Fonts;
@@ -30,6 +32,11 @@ public unsafe class ContextManager : IDisposable
 	private const string PresentSig = "E8 ?? ?? ?? ?? C6 47 79 00";
 	private const int Interval = 5000;
 
+	private readonly IPluginLog _log;
+	private readonly IGameInteropProvider _hooks;
+	private readonly IGameGui _gameGui;
+	private readonly Configuration _config;
+	
 	private delegate void PresentPrototype(nint address);
 	private readonly Hook<PresentPrototype> _presentHook;
 	
@@ -38,15 +45,20 @@ public unsafe class ContextManager : IDisposable
 	private string _contextDir;
 	private readonly CancellationTokenSource _tokenSource;
 
-	private readonly Font _font = SystemFonts.CreateFont("Consolas", 12f, FontStyle.Regular);
+	// private readonly Font _font = SystemFonts.CreateFont("Consolas", 12f, FontStyle.Regular);
 
-	public ContextManager()
+	public ContextManager(IPluginLog log, IGameInteropProvider hooks, IGameGui gameGui, Configuration config, ISigScanner sigScanner)
 	{
+		_log = log;
+		_hooks = hooks;
+		_gameGui = gameGui;
+		_config = config;
+		
 		_contextContainer = new ContextContainer();
 		_tokenSource = new CancellationTokenSource();
 		
-		var presentPtr = DalamudApi.SigScanner.ScanText(PresentSig);
-		_presentHook = DalamudApi.Hooks.HookFromAddress<PresentPrototype>(presentPtr, PresentDetour);
+		var presentPtr = sigScanner.ScanText(PresentSig);
+		_presentHook = hooks.HookFromAddress<PresentPrototype>(presentPtr, PresentDetour);
 		
 		_lastCtx = 0;
 	}
@@ -55,7 +67,7 @@ public unsafe class ContextManager : IDisposable
 	{
 		lock (_contextContainer)
 			_contextContainer.CaptureGuid = captureGuid;
-		_contextDir = Path.Combine(Chronofoil.Configuration.StorageDirectory, captureGuid.ToString(), "ctx");
+		_contextDir = Path.Combine(_config.StorageDirectory, captureGuid.ToString(), "ctx");
 		Directory.CreateDirectory(_contextDir);
 		_presentHook?.Enable();
 	}
@@ -119,7 +131,7 @@ public unsafe class ContextManager : IDisposable
 				
 				foreach (var censorable in CensorRegistry.Censorables)
 				{
-					var addon = (AtkUnitBase*)DalamudApi.GameGui.GetAddonByName(censorable.AddonString);
+					var addon = (AtkUnitBase*)_gameGui.GetAddonByName(censorable.AddonString);
 					if (addon != null)
 					{
 						var offsetX = censorable.Type == Censorable.CensorType.Full ? 0 : (int) censorable.Offset.X;
@@ -147,7 +159,7 @@ public unsafe class ContextManager : IDisposable
 		}
 		catch (Exception e)
 		{
-			DalamudApi.PluginLog.Error(e, "oh no");
+			_log.Error(e, "oh no");
 		}
 		finally
 		{
@@ -187,7 +199,7 @@ public unsafe class ContextManager : IDisposable
 		}
 		catch (Exception e)
 		{
-			DalamudApi.PluginLog.Error(e, "oh no 2");
+			_log.Error(e, "oh no 2");
 		}
 	}
 }

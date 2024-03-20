@@ -2,39 +2,54 @@
 using Chronofoil.Capture.Context;
 using Chronofoil.Capture.IO;
 using Chronofoil.Packet;
+using Dalamud.Interface.ImGuiNotification;
+using Dalamud.Plugin.Services;
 
 namespace Chronofoil.Capture;
 
 public class CaptureSessionManager : IDisposable
 {
 	private readonly PersistentCaptureData _persistentCaptureData;
+
+	private readonly IPluginLog _log;
+	private readonly Configuration _config;
+	private readonly IClientState _clientState;
+	private readonly INotificationManager _notificationManager;
 	
 	private readonly CaptureHookManager _hookManager;
 	private readonly ContextManager _contextManager;
 
 	private CaptureSession _session;
 
-	private bool _initialized;
+	private bool _isCapturing;
 
-	public CaptureSessionManager()
+	public CaptureSessionManager(
+		IPluginLog log,
+		Configuration config,
+		IClientState clientState,
+		INotificationManager notificationManager,
+		ContextManager contextManager,
+		CaptureHookManager hookManager)
 	{
-		_persistentCaptureData = new PersistentCaptureData();
-		_contextManager = new ContextManager();
-		_hookManager = new CaptureHookManager();
-		_hookManager.Enable();
+		_log = log;
+		_config = config;
+		_clientState = clientState;
+		_notificationManager = notificationManager;
+		
+		_contextManager = contextManager;
+		_hookManager = hookManager;
 		_hookManager.NetworkInitialized += OnNetworkInitialized;
+		_persistentCaptureData = new PersistentCaptureData();
 	}
 
 	public void Dispose()
 	{
 		End();
-		_hookManager.Dispose();
-		_contextManager.Dispose();
 	}
 
 	private void Restart()
 	{
-		DalamudApi.PluginLog.Debug("[CaptureSessionManager] Restart!");
+		_log.Debug("[CaptureSessionManager] Restart!");
 
 		End();
 		Begin();
@@ -42,31 +57,31 @@ public class CaptureSessionManager : IDisposable
 
 	public void Begin()
 	{
-		DalamudApi.PluginLog.Debug("[CaptureSessionManager] Begin!");
+		_log.Debug("[CaptureSessionManager] Begin!");
 		var guid = Guid.NewGuid();
-		_session = new CaptureSession(_persistentCaptureData, guid);
+		_session = new CaptureSession(_log, _config, _persistentCaptureData, guid);
 		_contextManager.Reset(guid);
 		_hookManager.NetworkEvent += OnNetworkEvent;
-		DalamudApi.ClientState.Logout += End;
-		DalamudApi.PluginInterface.UiBuilder.AddNotification($"Capture session started: {guid}!");
-		_initialized = true;
+		_clientState.Logout += End;
+		_notificationManager.AddNotification(new Notification { Content = $"Capture session started: {guid}!" });
+		_isCapturing = true;
 	}
 
 	public void End()
 	{
-		DalamudApi.PluginLog.Debug("[CaptureSessionManager] End!");
+		_log.Debug("[CaptureSessionManager] End!");
 		_contextManager.Stop();
 		_hookManager.NetworkEvent -= OnNetworkEvent;
-		DalamudApi.ClientState.Logout -= End;
+		_clientState.Logout -= End;
 		_session?.FinalizeSession();
-		_initialized = false;
+		_isCapturing = false;
 	}
 	
 	private void OnNetworkInitialized()
 	{
-		DalamudApi.PluginLog.Debug("[CaptureSessionManager] OnNetworkInitialized!");
+		_log.Debug("[CaptureSessionManager] OnNetworkInitialized!");
 
-		if (_initialized)
+		if (_isCapturing)
 			Restart();
 		else
 			Begin();
@@ -74,9 +89,9 @@ public class CaptureSessionManager : IDisposable
 	
 	private void OnNetworkEvent(PacketProto proto, Direction direction, ReadOnlySpan<byte> data)
 	{
-		DalamudApi.PluginLog.Debug($"[CaptureSessionManager] OnNetworkEvent! {proto} {direction}");
+		_log.Debug($"[CaptureSessionManager] OnNetworkEvent! {proto} {direction}");
 
-		if (_initialized)
+		if (_isCapturing)
 			_session.WritePacket(proto, direction, data);
 	}
 }
