@@ -6,6 +6,7 @@ using Chronofoil.Packet;
 using Chronofoil.Utility;
 using Dalamud.Game;
 using Dalamud.Interface;
+using Dalamud.Interface.ImGuiNotification;
 using Dalamud.Plugin.Services;
 
 namespace Chronofoil.Capture.IO;
@@ -37,20 +38,20 @@ public unsafe class CaptureHookManager : IDisposable
 
 	private readonly IPluginLog _log;
 	private readonly LobbyEncryptionProvider _encryptionProvider;
-	private readonly UiBuilder _uiBuilder;
+	private readonly INotificationManager _notificationManager;
 	private readonly SimpleBuffer _buffer;
 
 	public CaptureHookManager(
 		IPluginLog log,
 		LobbyEncryptionProvider encryptionProvider,
-		UiBuilder uiBuilder,
+		INotificationManager notificationManager,
 		MultiSigScanner multiScanner,
 		ISigScanner sigScanner,
 		IGameInteropProvider hooks)
 	{
 		_log = log;
 		_encryptionProvider = encryptionProvider;
-		_uiBuilder = uiBuilder;
+		_notificationManager = notificationManager;
 		
 		_buffer = new SimpleBuffer(1024 * 1024);
 		
@@ -71,6 +72,8 @@ public unsafe class CaptureHookManager : IDisposable
 		
 		var lobbyTxPtr = multiScanner.ScanText(LobbyTxSignature, 1);
 		_lobbyTxHook = hooks.HookFromAddress<LobbyTxPrototype>(lobbyTxPtr[0], LobbyTxDetour);
+
+		Enable();
 	}
 
 	public void Enable()
@@ -209,7 +212,11 @@ public unsafe class CaptureHookManager : IDisposable
         // Compression
         if (header.Compression != CompressionType.None)
         {
-            _uiBuilder.AddNotification($"[{proto}{direction}] A frame was compressed.", "Chronofoil Error");
+            _notificationManager.AddNotification(new Notification
+	            {
+		            Content = $"[{proto}{direction}] A frame was compressed.",
+		            Title = "Chronofoil Error", 
+	            });
             // _log.Debug($"frame compressed: {header.Compression} payload is {header.TotalSize - 40} bytes, decomp'd is {header.DecompressedLength}");
             return;
         }
@@ -222,11 +229,12 @@ public unsafe class CaptureHookManager : IDisposable
             _buffer.Write(pktHdrSlice);
             var pktHdr = Util.Cast<byte, PacketElementHeader>(pktHdrSlice);
 
-            _log.Debug($"packet: type {pktHdr.Type}, {pktHdr.Size} bytes, {proto} {direction}, {pktHdr.SrcEntity} -> {pktHdr.DstEntity}");
+            // _log.Debug($"packet: type {pktHdr.Type}, {pktHdr.Size} bytes, {proto} {direction}, {pktHdr.SrcEntity} -> {pktHdr.DstEntity}");
             
             var pktData = data.Slice(offset + pktHdrSize, (int)pktHdr.Size - pktHdrSize);
 
-            var isNetworkInit = proto == PacketProto.Lobby && direction == Direction.Rx && pktHdr.Type is PacketType.KeepAlive; 
+            // The server sends a keepalive packet to the client right after connection, indicating a new connection
+            var isNetworkInit = proto == PacketProto.Lobby && direction == Direction.Rx && pktHdr.Type is PacketType.KeepAlive;
             var canInitEncryption = proto == PacketProto.Lobby && pktHdr.Type is PacketType.EncryptionInit;
             var needsDecryption = proto == PacketProto.Lobby && pktHdr.Type is PacketType.Ipc or PacketType.Unknown_A;
             

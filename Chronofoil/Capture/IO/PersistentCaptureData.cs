@@ -33,7 +33,7 @@ public class PersistentCaptureData
 		var dx11Path = path.Replace("ffxiv.exe", "ffxiv_dx11.exe");
 		var dx9Path = path.Replace("ffxiv_dx11.exe", "ffxiv.exe");
 
-		var dx9Data = File.ReadAllBytes(dx9Path);
+		var dx9Data = File.Exists(dx9Path) ? File.ReadAllBytes(dx9Path) : Array.Empty<byte>();
 		var dx11Data = File.ReadAllBytes(dx11Path);
 
 		var parent = Directory.GetParent(path).FullName;
@@ -45,7 +45,7 @@ public class PersistentCaptureData
 		var ex3VerFile = Path.Combine(sqpack, "ex3", "ex3.ver");
 		var ex4VerFile = Path.Combine(sqpack, "ex4", "ex4.ver");
 		
-		Dx9GameRev = GetBuild(dx9Data);
+		Dx9GameRev = File.Exists(dx9Path) ? GetBuild(dx9Data) : ulong.MaxValue;
 		Dx11GameRev = GetBuild(dx11Data);
 		Dx9Hash = GetHash(dx9Data);
 		Dx11Hash = GetHash(dx11Data);
@@ -55,7 +55,6 @@ public class PersistentCaptureData
 		Ex3GameVer = GetVer(ex3VerFile);
 		Ex4GameVer = GetVer(ex4VerFile);
 		PluginVersion = Assembly.GetExecutingAssembly().GetName().Version.ToString();
-		Logging.Debug($"testing logging5, {PluginVersion}");
 	}
 	
 	private static ulong GetBuild(byte[] data)

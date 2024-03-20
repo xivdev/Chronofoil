@@ -22,7 +22,7 @@ public static class Util
 		return MemoryMarshal.Cast<byte, T>(span)[0];
 	}
 	
-	public static U Cast<T, U>(Span<T> input) where T : struct where U : struct
+	public static U Cast<T, U>(ReadOnlySpan<T> input) where T : struct where U : struct
 	{
 		return MemoryMarshal.Cast<T, U>(input)[0];
 	}

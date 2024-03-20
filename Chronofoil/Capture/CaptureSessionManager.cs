@@ -2,7 +2,7 @@
 using Chronofoil.Capture.Context;
 using Chronofoil.Capture.IO;
 using Chronofoil.Packet;
-using Dalamud.Interface;
+using Dalamud.Interface.ImGuiNotification;
 using Dalamud.Plugin.Services;
 
 namespace Chronofoil.Capture;
@@ -14,7 +14,7 @@ public class CaptureSessionManager : IDisposable
 	private readonly IPluginLog _log;
 	private readonly Configuration _config;
 	private readonly IClientState _clientState;
-	private readonly UiBuilder _uiBuilder;
+	private readonly INotificationManager _notificationManager;
 	
 	private readonly CaptureHookManager _hookManager;
 	private readonly ContextManager _contextManager;
@@ -27,21 +27,19 @@ public class CaptureSessionManager : IDisposable
 		IPluginLog log,
 		Configuration config,
 		IClientState clientState,
-		UiBuilder uiBuilder,
+		INotificationManager notificationManager,
 		ContextManager contextManager,
 		CaptureHookManager hookManager)
 	{
 		_log = log;
 		_config = config;
 		_clientState = clientState;
-		_uiBuilder = uiBuilder;
+		_notificationManager = notificationManager;
 		
 		_contextManager = contextManager;
 		_hookManager = hookManager;
-		_hookManager.Enable();
-		
-		_persistentCaptureData = new PersistentCaptureData();
 		_hookManager.NetworkInitialized += OnNetworkInitialized;
+		_persistentCaptureData = new PersistentCaptureData();
 	}
 
 	public void Dispose()
@@ -65,7 +63,7 @@ public class CaptureSessionManager : IDisposable
 		_contextManager.Reset(guid);
 		_hookManager.NetworkEvent += OnNetworkEvent;
 		_clientState.Logout += End;
-		_uiBuilder.AddNotification($"Capture session started: {guid}!");
+		_notificationManager.AddNotification(new Notification { Content = $"Capture session started: {guid}!" });
 		_isCapturing = true;
 	}
 

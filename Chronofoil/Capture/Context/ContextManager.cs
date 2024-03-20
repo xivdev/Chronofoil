@@ -45,7 +45,7 @@ public unsafe class ContextManager : IDisposable
 	private string _contextDir;
 	private readonly CancellationTokenSource _tokenSource;
 
-	private readonly Font _font = SystemFonts.CreateFont("Consolas", 12f, FontStyle.Regular);
+	// private readonly Font _font = SystemFonts.CreateFont("Consolas", 12f, FontStyle.Regular);
 
 	public ContextManager(IPluginLog log, IGameInteropProvider hooks, IGameGui gameGui, Configuration config, ISigScanner sigScanner)
 	{

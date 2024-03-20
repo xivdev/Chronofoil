@@ -1,9 +1,5 @@
 ﻿using Dalamud.Game.Command;
-using Dalamud.Plugin;
-using Dalamud.IoC;
-using Chronofoil.Capture;
-using Chronofoil.Utility;
-using Dalamud.Interface;
+using Chronofoil.UI;
 using Dalamud.Plugin.Services;
 
 namespace Chronofoil;
@@ -13,25 +9,19 @@ public class Chronofoil
     private const string CommandName = "/chronofoil";
     
     private readonly ICommandManager _commandManager;
-    private readonly UiBuilder _uiBuilder;
-    private readonly CaptureSessionManager _captureSessionManager;
+    private readonly ChronofoilUI _ui;
     
     public Chronofoil(
         ICommandManager commandManager,
-        UiBuilder uiBuilder, 
-        CaptureSessionManager captureSessionManager)
+        ChronofoilUI ui)
     {
         _commandManager = commandManager;
-        _uiBuilder = uiBuilder;
-        _captureSessionManager = captureSessionManager;
+        _ui = ui;
         
         _commandManager.AddHandler(CommandName, new CommandInfo(OnCommand)
         {
-            HelpMessage = "Opens the Chronofoil UI.",
+            HelpMessage = "Chronofoil general command.",
         });
-
-        _uiBuilder.Draw += DrawUI;
-        _uiBuilder.OpenConfigUi += DrawConfigUI;
     }
     
     public void Dispose()
@@ -41,16 +31,16 @@ public class Chronofoil
 
     private void OnCommand(string command, string args)
     {
-        
-    }
-
-    private void DrawUI()
-    {
-        
-    }
-
-    private void DrawConfigUI()
-    {
-        
+        switch (args)
+        {
+            case "monitor":
+                _ui.ShowMonitorWindow();    
+                break;
+            case "config" or "settings":
+                _ui.ShowSettingsWindow();
+                break;
+            default:
+                break;
+        }
     }
 }
